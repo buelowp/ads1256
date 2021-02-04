@@ -82,7 +82,6 @@ bool ADS1256::waitDReady()
         
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    std::cerr << __FUNCTION__ << ": READY pin never came available" << std::endl;
     return false;
 }
 
