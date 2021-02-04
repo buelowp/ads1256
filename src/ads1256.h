@@ -123,7 +123,7 @@ static const uint8_t ADS1256_DRATE_E[ADS1256_DRATE_MAX] =
 class ADS1256
 {
 public:
-    ADS1256();
+    ADS1256(double vref = 5.0);
     ~ADS1256();
     
     void reset();
@@ -131,6 +131,9 @@ public:
     uint8_t readChipId();
     uint32_t value(uint8_t channel);
     int values(uint32_t *array, int first = 0, int count = 8);
+    int voltages(double *array, int first = 0, int count = 8);
+    double voltage(uint8_t channel);
+
     void configADC(ADS1256_GAIN gain, ADS1256_DRATE drate);
     
 private:
@@ -146,6 +149,7 @@ private:
     uint32_t readADC();
     uint32_t currentTime();
 
+    double m_vref;
     int m_mode;
     ADS1256_GAIN m_gain;
     ADS1256_DRATE m_rate;

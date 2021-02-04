@@ -18,7 +18,7 @@
 
 #include "ads1256.h"
 
-ADS1256::ADS1256()
+ADS1256::ADS1256(double vref) : m_vref(vref)
 {
     wiringPiSetupGpio();
     wiringPiSPISetupMode(0, 3200000, 1);
@@ -146,7 +146,6 @@ uint32_t ADS1256::value(uint8_t channel)
     
     if (waitDReady()) {
         if (!m_mode) {// 0  Single-ended input  8 channel1 Differential input  4 channe
-            std::cout << __FUNCTION__ << ": non differential input for channel " << channel << std::endl;
             if (channel > 7)
                 return 0;
             
@@ -156,7 +155,6 @@ uint32_t ADS1256::value(uint8_t channel)
             value = readADC();
         }
     	else {
-            std::cout << __FUNCTION__ << ": differential input for channel " << channel << std::endl;
             if (channel >= 4)
                 return 0;
 
@@ -167,6 +165,23 @@ uint32_t ADS1256::value(uint8_t channel)
         }
     }
     return value;
+}
+
+double ADS1256::voltage(uint8_t channel)
+{
+    uint32_t v = value(channel);
+    return v * m_vref / 0x7fffff;
+}
+
+int ADS1256::voltages(double *array, int first, int count)
+{
+    int i = first;
+    
+    for (i; i < count; i++) {
+        array[i] = voltage(i);
+    }
+    
+    return i;
 }
 
 uint8_t ADS1256::readChipId()

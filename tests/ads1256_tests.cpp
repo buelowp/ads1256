@@ -119,4 +119,17 @@ namespace
 
         EXPECT_EQ(value, 0) << "Returned: " << value;
     }
+
+    TEST(ADS1256, GetChannelEightVoltage)
+    {
+        double value = 0;
+        ADS1256 ads1256;
+        
+        ads1256.reset();
+        ads1256.configADC(ADS1256_GAIN_1, ADS1256_30000SPS);
+        
+        value = ads1256.voltage(7);
+
+        EXPECT_EQ(value, 0) << "Returned: " << value;
+    }
 }
