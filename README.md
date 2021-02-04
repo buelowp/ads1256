@@ -6,6 +6,15 @@ Waveshare and provides a simple interface for using that HAT.
 DA services will come at some point. This is being used internally by me and may never become easy to use outside of what I 
 need from it. Just beware.
 
+## Building
+```
+mkdir build
+cmake ..
+make
+```
+
+## Usage
+
 ```
 #include <cstdio>
 #include <chrono>
