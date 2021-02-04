@@ -21,19 +21,15 @@
 ADS1256::ADS1256()
 {
     wiringPiSetupGpio();
+    wiringPiSPISetupMode(0, 3200000, 1);
+
     pinMode(DEV_RST_PIN, OUTPUT);
     pinMode(DEV_CS_PIN, OUTPUT);
     pinMode(DEV_DRDY_PIN, INPUT);
     
     digitalWrite(DEV_CS_PIN, HIGH);
-    digitalWrite(DEV_RST_PIN, HIGH);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    digitalWrite(DEV_RST_PIN, LOW);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    digitalWrite(DEV_RST_PIN, HIGH)
-    
-    std::cout << "__FUNCTION__: Talking to chipid " << readChipId << std::endl;
-    configADC(ADS1256_GAIN_1, ADS1256_30000SPS);
+    reset();
+    m_mode = 0;
 }
 
 ADS1256::~ADS1256()
@@ -62,7 +58,7 @@ void ADS1256::configADC(ADS1256_GAIN gain, ADS1256_DRATE drate)
         buf[1] = 0x08;
         buf[2] = (0 << 5) | (0 << 3) | (gain << 0);
         buf[3] = ADS1256_DRATE_E[drate];
-        digitalWrite(DEV_CS_PIN, 0);
+        digitalWrite(DEV_CS_PIN, LOW);
         write(CMD_WREG | 0);
         write(0x03);
 
@@ -70,21 +66,24 @@ void ADS1256::configADC(ADS1256_GAIN gain, ADS1256_DRATE drate)
         write(buf[1]);
         write(buf[2]);
         write(buf[3]);
-        digitalWrite(DEV_CS_PIN, 1);
+        digitalWrite(DEV_CS_PIN, HIGH);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
 bool ADS1256::waitDReady()
 {
-    double start = getCurrentTime();
+    double start = currentTime();
     // Waits for DRDY to go to zero or TIMEOUT seconds to pass
-    while (getCurrentTime() - start < 0.5) {
-        if (digitalRead(DEV_DRDY_PIN) == LOW) //  drdy_level = pi.read(17) # ADS1256 /DRDY
-            return;
+    while (currentTime() - start < 0.5) {
+        if (digitalRead(DEV_DRDY_PIN) == LOW) {
+            return true;
         }
+        
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    std::cerr << __FUNCTION__ << ": READY pin never came available" << std::endl;
+    return false;
 }
 
 void ADS1256::setMode(int mode)
@@ -103,7 +102,7 @@ uint32_t ADS1256::readADC()
     if (waitDReady()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         digitalWrite(DEV_CS_PIN, 0);
-        write(CMD_RDATA);
+        writeByte(CMD_RDATA);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         buf[0] = readByte();
         buf[1] = readByte();
@@ -147,24 +146,25 @@ uint32_t ADS1256::value(uint8_t channel)
     
     if (waitDReady()) {
         if (!m_mode) {// 0  Single-ended input  8 channel1 Differential input  4 channe
-            if (channel >= 8) {
+            std::cout << __FUNCTION__ << ": non differential input for channel " << channel << std::endl;
+            if (channel > 7)
                 return 0;
-            }
             
             setChannel(channel);
-            write(CMD_SYNC);
-            write(CMD_WAKEUP);
+            writeByte(CMD_SYNC);
+            writeByte(CMD_WAKEUP);
             value = readADC();
         }
-    }
-    else{
-        if (channel >= 4){
-            return 0;
+    	else {
+            std::cout << __FUNCTION__ << ": differential input for channel " << channel << std::endl;
+            if (channel >= 4)
+                return 0;
+
+            setDifferentialChannel(channel);
+            writeByte(CMD_SYNC);
+            writeByte(CMD_WAKEUP);
+            value = readADC();
         }
-        setDifferentialChannel(channel);
-        write(CMD_SYNC);
-        write(CMD_WAKEUP);
-        value = readADC();
     }
     return value;
 }
@@ -173,9 +173,11 @@ uint8_t ADS1256::readChipId()
 {
     uint8_t id;
     
-    waitDReady();
-    id = read(REG_STATUS);
-    return id >> 4;
+    if (waitDReady()) {
+        id = readRegister(REG_STATUS);
+        return id >> 4;
+    }
+    return 0xFF;
 }
 
 void ADS1256::setChannel(uint8_t channel)
@@ -184,22 +186,22 @@ void ADS1256::setChannel(uint8_t channel)
         return;
     }
     
-    writeReg(REG_MUX, (channel << 4) | (1 << 3));
+    writeRegister(REG_MUX, (channel << 4) | (1 << 3));
 }
 
 void ADS1256::setDifferentialChannel(uint8_t channel)
 {
     if (channel == 0){
-        writeReg(REG_MUX, (0 << 4) | 1);        //DiffChannal  AIN0-AIN1
+        writeRegister(REG_MUX, (0 << 4) | 1);        //DiffChannal  AIN0-AIN1
     }
     else if(channel == 1){
-        writeReg(REG_MUX, (2 << 4) | 3);        //DiffChannal   AIN2-AIN3
+        writeRegister(REG_MUX, (2 << 4) | 3);        //DiffChannal   AIN2-AIN3
     }
     else if(channel == 2){
-        writeReg(REG_MUX, (4 << 4) | 5);        //DiffChannal    AIN4-AIN5
+        writeRegister(REG_MUX, (4 << 4) | 5);        //DiffChannal    AIN4-AIN5
     }
     else if(channel == 3){
-        writeReg(REG_MUX, (6 << 4) | 7);        //DiffChannal   AIN6-AIN7
+        writeRegister(REG_MUX, (6 << 4) | 7);        //DiffChannal   AIN6-AIN7
     }
 }
 
@@ -210,6 +212,7 @@ void ADS1256::reset()
     digitalWrite(DEV_RST_PIN, LOW);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     digitalWrite(DEV_RST_PIN, HIGH);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
 }
 
 void ADS1256::write(uint8_t cmd)
@@ -219,7 +222,7 @@ void ADS1256::write(uint8_t cmd)
     digitalWrite(DEV_CS_PIN, HIGH);
 }
 
-void ADS1256::writeReg(uint8_t reg, uint8_t data)
+void ADS1256::writeRegister(uint8_t reg, uint8_t data)
 {
     digitalWrite(DEV_CS_PIN, LOW);
     writeByte(CMD_WREG | reg);
@@ -228,13 +231,13 @@ void ADS1256::writeReg(uint8_t reg, uint8_t data)
     digitalWrite(DEV_CS_PIN, HIGH);
 }
 
-uint8_t ADS1256::read(uint8_t reg)
+uint8_t ADS1256::readRegister(uint8_t reg)
 {
     uint8_t temp = 0;
     
     digitalWrite(DEV_CS_PIN, LOW);
-    write(CMD_RREG | reg);
-    write(0x00);
+    writeByte(CMD_RREG | reg);
+    writeByte(0x00);
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     temp = readByte();
     digitalWrite(DEV_CS_PIN, HIGH);

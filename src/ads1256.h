@@ -127,20 +127,19 @@ public:
     ~ADS1256();
     
     void reset();
-    
-    void write(uint8_t cmd);
-    void writeReg(uint8_t reg, uint8_t data);
-    uint8_t read(uint8_t reg);
-    
+        
+    uint8_t readChipId();
     uint32_t value(uint8_t channel);
     int values(uint32_t *array, int first = 0, int count = 8);
+    void configADC(ADS1256_GAIN gain, ADS1256_DRATE drate);
     
 private:
+    void writeRegister(uint8_t reg, uint8_t data);
+    uint8_t readRegister(uint8_t reg);
+    void write(uint8_t cmd);
     uint8_t readByte();
     void writeByte(uint8_t value);
-    uint8_t readChipId();
     bool waitDReady();
-    void configADC(ADS1256_GAIN gain, ADS1256_DRATE drate);
     void setChannel(uint8_t channel);
     void setDifferentialChannel(uint8_t channel);
     void setMode(int mode);
